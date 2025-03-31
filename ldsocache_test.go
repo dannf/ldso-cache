@@ -2,7 +2,6 @@ package ldsocache
 
 import (
 	"testing"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,6 +19,50 @@ func Test_LoadCacheFile(t *testing.T) {
 
 func Test_WriteCacheFile(t *testing.T) {
 	cacheFile, err := LoadCacheFile("testdata/ld.so.cache")
+	require.NoError(t, err)
+
+	err = cacheFile.Write("testdata/ld.so.cache-new")
+	require.NoError(t, err)
+}
+
+func do_compare(t *testing.T, a string, b string, expected int) {
+	cmp, err := soname_cmp(SoVer(a), SoVer(b))
+	require.NoError(t, err)
+	require.Equal(t, expected, cmp)
+}
+
+func Test_SoVer_Compare_Equal_Int(t *testing.T) {
+	do_compare(t, "1.0", "1.0", 0)
+}
+
+func Test_SoVer_Compare_Greater_Int(t *testing.T) {
+	do_compare(t, "1.0", "1.0.1", -1)
+	do_compare(t, "1.0", "1.1", -1)
+}
+
+func Test_SoVer_Compare_Lesser_Int(t *testing.T) {
+	do_compare(t, "1.0.1", "1.0", 1)
+	do_compare(t, "1.1", "1.0", 1)
+}
+
+func Test_SoVer_Compare_Equal_String(t *testing.T) {
+	do_compare(t, "1.foo1", "1.foo1", 0)
+}
+
+func Test_SoVer_Compare_Greater_String(t *testing.T) {
+	do_compare(t, "1.1", "1.1.foo", -1)
+	do_compare(t, "1.1", "1.foo1", -1)
+	do_compare(t, "1.1foo1", "1.foo2", -1)
+}
+
+func Test_SoVer_Compare_Lesser_String(t *testing.T) {
+	do_compare(t, "1.1.foo", "1.1", 1)
+	do_compare(t, "1.foo1", "1.1", 1)
+	do_compare(t, "1.foo2", "1.1foo1", 1)
+}
+
+func Test_GenerateCacheFile(t *testing.T) {
+	cacheFile, err := BuildCacheFileForConfig("/etc/ld.so.conf")
 	require.NoError(t, err)
 
 	err = cacheFile.Write("testdata/ld.so.cache-new")
