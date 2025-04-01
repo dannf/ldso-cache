@@ -140,11 +140,16 @@ func (shdr *LDSOCacheExtensionSectionHeader) describe() {
 	fmt.Printf("  Size [%d]\n", shdr.Size)
 }
 
-func ParseLDSOConf(ldsoconf string) ([]string, error) {
-	//fmt.Printf("DEBUG: Parsing %s\n", ldsoconf)
-	contents, err := os.ReadFile(ldsoconf)
+func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
+	conf, err := fsys.Open(ldsoconf)
 	if err != nil {
 		fmt.Printf("Warning: Could not open config file %s\n", ldsoconf)
+		return nil, err
+	}
+	defer conf.Close()
+	contents, err := io.ReadAll(conf)
+	if err != nil {
+		fmt.Printf("Warning: Could not read config file %s\n", ldsoconf)
 		return nil, err
 	}
 	var libpaths []string
@@ -163,13 +168,18 @@ func ParseLDSOConf(ldsoconf string) ([]string, error) {
 		glob, is_include := strings.CutPrefix(line, "include ")
 		if is_include {
 			glob = strings.TrimSpace(glob)
-			matches, err := filepath.Glob(glob)
+			glob = strings.TrimLeft(glob, "/")
+			matches, err := fs.Glob(fsys, glob)
 			if err != nil {
 				fmt.Printf("Warning: glob error in %s: %s", ldsoconf, glob)
 				continue
 			}
+			if len(matches) == 0 {
+				fmt.Printf("Warning: No matches for glob %s in %s\n", glob, ldsoconf)
+			}
+
 			for _, match := range matches {
-				incpaths, err := ParseLDSOConf(match)
+				incpaths, err := ParseLDSOConf(fsys, match)
 				if err != nil {
 					fmt.Printf("Warning: Could not parse config file %s\n", match)
 					continue
@@ -178,11 +188,12 @@ func ParseLDSOConf(ldsoconf string) ([]string, error) {
 			}
 			return libpaths, nil
 		}
-		if _, err := os.Stat(line); os.IsNotExist(err) {
+		if _, err := fs.Stat(fsys, line); os.IsNotExist(err) {
 			continue
 		}
 		// Avoid duplicates from e.g. /lib -> /usr/lib.
-		realpath, err := filepath.EvalSymlinks(line)
+		//realpath, err := filepath.EvalSymlinks(line)
+		realpath := line
 		//fmt.Printf("DEBUG: Converting %s to realpath %s\n", line, realpath)
 
 		if err != nil {
@@ -273,10 +284,12 @@ func soname_cmp(a SoVer, b SoVer) (int, error) {
 	return 0, nil
 }
 
-func BuildLDSOCacheEntries(libdir string) ([]LDSOCacheEntry, error) {
+func BuildLDSOCacheEntries(fsys fs.FS, libdir string) ([]LDSOCacheEntry, error) {
 	somap := make(map[string]DynLib)
 
-	dirents, err := os.ReadDir(libdir)
+	// fs.FS wants all file paths to be relative
+	libdir = strings.TrimLeft(libdir, "/")
+	dirents, err := fs.ReadDir(fsys, libdir)
 	if err != nil {
 		// It is OK for a directory to not exist
 		return nil, nil
@@ -296,30 +309,44 @@ func BuildLDSOCacheEntries(libdir string) ([]LDSOCacheEntry, error) {
 		mode := dirent.Type()
 		is_link := (mode & fs.ModeSymlink != 0)
 		if !mode.IsRegular() && !is_link {
-			fmt.Printf("%s: Not a symlink or regular file\n", name)
 			continue
 		}
 		fullpath := filepath.Join(libdir, name)
-		//fmt.Printf("DEBUG: Processing %s\n", fullpath)
-		libf, err := elf.Open(fullpath)
+		libf, err := fsys.Open(fullpath)
 		if err != nil {
 			continue
 		}
 		defer libf.Close()
+		// Ugly hack.
+		// We could call elf.NewFile(libf) here, but that only works
+		// if libf implements ReadAt. apko's tarfs does not. Work
+		// around that by reading the file into memory first.
+		var buf []byte
+		buf, err = fs.ReadFile(fsys, fullpath)
+		libf.Close()
+		r := bytes.NewReader(buf)
+		if err != nil {
+			fmt.Printf("DEBUG: Unable to read %s\n", fullpath)
+			continue
+		}
+		elflibf, err := elf.NewFile(r)
+		if err != nil {
+			fmt.Printf("DEBUG: Unable to open %s as ELF\n", fullpath)
+			continue
+		}
 		// FIXME: do we need to check for the ELF magic bytes?
-		if libf.FileHeader.Type != elf.ET_DYN {
+		if elflibf.FileHeader.Type != elf.ET_DYN {
 			continue
 		}
 		flags := uint32(0)
 		flags |= FLAG_ELF
 		// FIXME: Shouldn't just assert this
 		flags |= FLAG_ELF_LIBC6
-		sonames, err := libf.DynString(elf.DT_SONAME)
+		sonames, err := elflibf.DynString(elf.DT_SONAME)
 		if err != nil {
-			//fmt.Printf("DEBUG: %s does not have sonames\n", fullpath)
 			continue
 		}
-		switch libf.FileHeader.Machine {
+		switch elflibf.FileHeader.Machine {
 		case elf.EM_X86_64:
 			flags |= FLAG_X8664_LIB64
 		case elf.EM_AARCH64:
@@ -338,7 +365,8 @@ func BuildLDSOCacheEntries(libdir string) ([]LDSOCacheEntry, error) {
 				continue
 			}
 			entry := LDSOCacheEntry{
-				Name: fullpath,
+				// fullpath is relative to "/"
+				Name: filepath.Join("/", fullpath),
 				Flags: flags,
 				OSVersion_Needed: 0,
 				HWCap_Needed: 0,
@@ -368,23 +396,20 @@ func BuildLDSOCacheEntries(libdir string) ([]LDSOCacheEntry, error) {
 	entries := make([]LDSOCacheEntry, len(somap))
 	i := 0
 	for _, value := range somap {
-		//fmt.Printf("DEBUG: adding %s\n", value.entry.Name)
 		entries[i] = *value.entry
 		i++
 	}
 	return entries, nil
 }
 
-func BuildCacheFileForDirs(libdirs []string) (*LDSOCacheFile, error) {
+func BuildCacheFileForDirs(fsys fs.FS, libdirs []string) (*LDSOCacheFile, error) {
 	all_entries := []LDSOCacheEntry{}
 
 	for _, libdir := range libdirs {
-		//fmt.Printf("DEBUG: building slice for libdir %s\n", libdir)
-		entries, err := BuildLDSOCacheEntries(libdir)
+		entries, err := BuildLDSOCacheEntries(fsys, libdir)
 		if err != nil {
 			return nil, err
 		}
-		//fmt.Printf("DEBUG: libdir %s has %d entries\n", libdir, len(entries))
 		all_entries = append(all_entries, entries...)
 	}
 
@@ -393,7 +418,6 @@ func BuildCacheFileForDirs(libdirs []string) (*LDSOCacheFile, error) {
 	copy(magic[:], ldsoMagic)
 	copy(version[:], ldsoVersion)
 
-	//fmt.Printf("DEBUG: Creating cachefile for %d entries\n", len(all_entries))
 	header := LDSORawCacheHeader{
 		Magic: magic,
 		Version: version,
@@ -408,17 +432,15 @@ func BuildCacheFileForDirs(libdirs []string) (*LDSOCacheFile, error) {
 	return &cf, nil
 }
 
-func BuildCacheFileForConfig(cfgpath string) (*LDSOCacheFile, error) {
-	libdirs, err := ParseLDSOConf(cfgpath)
-	//fmt.Printf("DEBUG: ParseLDSOConf returned %d libdirs\n", len(libdirs))
+func BuildCacheFileForConfig(fsys fs.FS, cfgpath string) (*LDSOCacheFile, error) {
+	libdirs, err := ParseLDSOConf(fsys, cfgpath)
 	if err != nil {
 		return nil, err
 	}
-	cf, err := BuildCacheFileForDirs(libdirs)
+	cf, err := BuildCacheFileForDirs(fsys, libdirs)
 	if err != nil {
 		return nil, err
 	}
-	//fmt.Printf("DEBUG: cachefile has %d entries\n", len(cf.Entries))
 	return cf, nil
 }
 
@@ -554,8 +576,7 @@ func extractShlibName(strtable []byte, startIdx uint32) (string, error) {
 	return string(subset[:terminatorPos]), nil
 }
 
-// Write writes a cache file to disk.
-func (cf *LDSOCacheFile) Write(path string) error {
+func (cf *LDSOCacheFile) Write(w io.Writer) (error) {
 	buf := &bytes.Buffer{}
 
 	// Calculate the size of the file entry table for use
@@ -632,17 +653,8 @@ func (cf *LDSOCacheFile) Write(path string) error {
 		}
 	}
 
-	w, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer w.Close()
-
-	if _, err := io.Copy(w, buf); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := io.Copy(w, buf)
+	return err
 }
 
 // Write writes a header for a cache file to disk.

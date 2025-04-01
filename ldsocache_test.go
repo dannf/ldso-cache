@@ -1,6 +1,7 @@
 package ldsocache
 
 import (
+	"os"
 	"testing"
 	"github.com/stretchr/testify/require"
 )
@@ -20,9 +21,26 @@ func Test_LoadCacheFile(t *testing.T) {
 func Test_WriteCacheFile(t *testing.T) {
 	cacheFile, err := LoadCacheFile("testdata/ld.so.cache")
 	require.NoError(t, err)
-
-	err = cacheFile.Write("testdata/ld.so.cache-new")
+	out, err := os.Create("testdata/ld.so.cache-new")
 	require.NoError(t, err)
+	err = cacheFile.Write(out)
+	require.NoError(t, err)
+}
+
+func Test_ParseLDSOConf_Simple(t *testing.T) {
+	fsys := os.DirFS("testdata")
+	dirs, err := ParseLDSOConf(fsys, "ld.so.conf.simple")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(dirs))
+	require.Equal(t, "/lib", dirs[0])
+}
+
+func Test_ParseLDSOConf_Glob(t *testing.T) {
+	fsys := os.DirFS("testdata")
+	dirs, err := ParseLDSOConf(fsys, "ld.so.conf.glob")
+	require.NoError(t, err)
+	require.Contains(t, dirs, "/a/libs")
+	require.Contains(t, dirs, "/b/libs")
 }
 
 func do_compare(t *testing.T, a string, b string, expected int) {
@@ -62,9 +80,11 @@ func Test_SoVer_Compare_Lesser_String(t *testing.T) {
 }
 
 func Test_GenerateCacheFile(t *testing.T) {
-	cacheFile, err := BuildCacheFileForConfig("/etc/ld.so.conf")
+	root := os.DirFS("/")
+	cacheFile, err := BuildCacheFileForConfig(root, "etc/ld.so.conf")
 	require.NoError(t, err)
-
-	err = cacheFile.Write("testdata/ld.so.cache-new")
+	lsc, err := os.Create("testdata/ld.so.cache-generated")
+	require.NoError(t, err)
+	err = cacheFile.Write(lsc)
 	require.NoError(t, err)
 }
