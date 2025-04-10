@@ -1,6 +1,7 @@
 package ldsocache
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,8 @@ func Test_LoadCacheFile(t *testing.T) {
 func Test_WriteCacheFile(t *testing.T) {
 	cacheFile, err := LoadCacheFile("testdata/ld.so.cache")
 	require.NoError(t, err)
-
-	err = cacheFile.Write("testdata/ld.so.cache-new")
+	out, err := os.Create("testdata/ld.so.cache-new")
+	require.NoError(t, err)
+	err = cacheFile.Write(out)
 	require.NoError(t, err)
 }
