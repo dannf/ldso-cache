@@ -245,6 +245,13 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 		}
 		libf.Close()
 
+		// ldconfig will add an entry for a .so file even if it has
+		// no SONAME. Observed with libR.so on Ubuntu.
+		if len(sonames) == 0 && strings.HasSuffix(realname, ".so") {
+			sonames = append(sonames, realname)
+			fmt.Printf("DEBUG: %s has no SONAME, using filename as an SONAME\n", realname)
+		}
+
 		if len(sonames) == 0 && strings.HasSuffix(realname, ".so") {
 			sonames = append(sonames, realname)
 			fmt.Printf("DEBUG: %s has no DT_SONAME, using %s as an SONAME\n", realname, realname)
