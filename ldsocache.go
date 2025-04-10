@@ -475,7 +475,7 @@ func (cf *LDSOCacheFile) Write(w io.Writer) error {
 
 		lrcEntry := LDSORawCacheEntry{
 			Flags: lib.Flags,
-			Key: cursor + uint32(len(filepath.Dir(lib.Name))),
+			Key: cursor + uint32(len(filepath.Dir(lib.Name))+1),
 			Value: cursor,
 			OSVersion_Needed: lib.OSVersion_Needed,
 			HWCap_Needed: lib.HWCap_Needed,
