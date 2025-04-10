@@ -16,11 +16,14 @@ package ldsocache
 
 import (
 	"bytes"
+	"debug/elf"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"unsafe"
 )
 
@@ -28,6 +31,33 @@ const ldsoMagic = "glibc-ld.so.cache"
 const ldsoVersion = "1.1"
 const ldsoExtensionMagic = 0xEAA42174
 const cacheExtensionTagGenerator = uint32(1)
+
+const (
+	FLAG_ANY                    uint32 = 0xffff
+	FLAG_TYPE_MASK              uint32 = 0x00ff
+	FLAG_LIBC4                  uint32 = 0x0000
+	FLAG_ELF                    uint32 = 0x0001
+	FLAG_ELF_LIBC5              uint32 = 0x0002
+	FLAG_ELF_LIBC6              uint32 = 0x0003
+	FLAG_REQUIRED_MASK          uint32 = 0xff00
+	FLAG_SPARC_LIB64            uint32 = 0x0100
+	FLAG_X8664_LIB64            uint32 = 0x0300
+	FLAG_S390_LIB64             uint32 = 0x0400
+	FLAG_POWERPC_LIB64          uint32 = 0x0500
+	FLAG_MIPS64_LIBN32          uint32 = 0x0600
+	FLAG_MIPS64_LIBN64          uint32 = 0x0700
+	FLAG_X8664_LIBX32           uint32 = 0x0800
+	FLAG_ARM_LIBHF              uint32 = 0x0900
+	FLAG_AARCH64_LIB64          uint32 = 0x0a00
+	FLAG_ARM_LIBSF              uint32 = 0x0b00
+	FLAG_MIPS_LIB32_NAN2008     uint32 = 0x0c00
+	FLAG_MIPS64_LIBN32_NAN2008  uint32 = 0x0d00
+	FLAG_MIPS64_LIBN64_NAN2008  uint32 = 0x0e00
+	FLAG_RISCV_FLOAT_ABI_SOFT   uint32 = 0x0f00
+	FLAG_RISCV_FLOAT_ABI_DOUBLE uint32 = 0x1000
+	FLAG_LARCH_FLOAT_ABI_SOFT   uint32 = 0x1100
+	FLAG_LARCH_FLOAT_ABI_DOUBLE uint32 = 0x1200
+)
 
 type LDSORawCacheHeader struct {
 	Magic   [17]byte
@@ -106,6 +136,186 @@ func (shdr *LDSOCacheExtensionSectionHeader) describe() {
 	fmt.Printf("  Flags [%x]\n", shdr.Flags)
 	fmt.Printf("  Offset [%d]\n", shdr.Offset)
 	fmt.Printf("  Size [%d]\n", shdr.Size)
+}
+
+func parse_lib_filename(realname string) (string, string, error) {
+	var name string
+	var ver string
+	// ldconfig(8) says it "will look only at files that are named lib*.so*
+	// (for regular shared objects) or ld-*.so* (for the dynamic loader itself).
+	// Other files will be ignored.
+	if !strings.HasPrefix(realname, "lib") && !strings.HasPrefix(realname, "ld-") {
+		return "", "", fmt.Errorf("filename does not start with 'lib' or 'ld-': %s", realname)
+	}
+	if !strings.Contains(realname, ".so") {
+		return "", "", fmt.Errorf("filename does not contain '.so': %s", realname)
+	}
+	if strings.HasSuffix(realname, ".so") {
+		name = strings.TrimSuffix(realname, ".so")
+		ver = ""
+	} else {
+		pieces := strings.Split(realname, ".so.")
+		if len(pieces) < 2 {
+			return "", "", fmt.Errorf("Invalid library name: %s", realname)
+		}
+		name = strings.Join(pieces[:len(pieces)-1], ".so.")
+		ver = pieces[len(pieces)-1]
+	}
+
+	fmt.Printf("RETURNING %s for %s\n", name, realname)
+	return name, ver, nil
+}
+
+func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEntry) (error) {
+	// fs.FS wants all file paths to be relative
+	libdir = strings.TrimLeft(libdir, "/")
+	dirents, err := fs.ReadDir(fsys, libdir)
+	if err != nil {
+		// It is OK for a directory to not exist
+		return nil
+	}
+
+	for _, dirent := range dirents {
+		realname := dirent.Name()
+		fullpath := filepath.Join(libdir, realname)
+		mode := dirent.Type()
+		is_link := (mode & fs.ModeSymlink != 0)
+
+		if is_link {
+			// Stat follows symlinks
+			info, err := fs.Stat(fsys, fullpath)
+			if err != nil {
+				fmt.Printf("Warning: Could not stat %s\n", fullpath)
+				continue
+			}
+			if !info.Mode().IsRegular() {
+				fmt.Printf("DEBUG: Skipping %s, not a link to a regular file\n", fullpath)
+				continue
+			}
+		}
+
+		if !(mode.IsRegular() || is_link) {
+			continue
+		}
+		libf, err := fsys.Open(fullpath)
+		if err != nil {
+			continue
+		}
+		defer libf.Close()
+		// Ugly hack.
+		// We could call elf.NewFile(libf) here, but that only works
+		// if libf implements ReadAt. apko's tarfs does not. Work
+		// around that by reading the file into memory first.
+		var buf []byte
+		buf, err = fs.ReadFile(fsys, fullpath)
+		if err != nil {
+			fmt.Printf("DEBUG: Unable to open %s\n", fullpath)
+			continue
+		}
+		libf.Close()
+		r := bytes.NewReader(buf)
+		if err != nil {
+			return err
+		}
+		elflibf, err := elf.NewFile(r)
+		if err != nil {
+			fmt.Printf("DEBUG: Unable to open %s as ELF\n", fullpath)
+			continue
+		}
+		// FIXME: do we need to check for the ELF magic bytes?
+		if elflibf.FileHeader.Type != elf.ET_DYN {
+			continue
+		}
+		flags := uint32(0)
+		flags |= FLAG_ELF
+		// FIXME: Shouldn't just assert this
+		flags |= FLAG_ELF_LIBC6
+		sonames, err := elflibf.DynString(elf.DT_SONAME)
+		if err != nil {
+			continue
+		}
+		switch elflibf.FileHeader.Machine {
+		case elf.EM_X86_64:
+			flags |= FLAG_X8664_LIB64
+		case elf.EM_AARCH64:
+			flags |= FLAG_AARCH64_LIB64
+		// FIXME: Add other architectures
+		default:
+			return fmt.Errorf("Unknown Machine Type")
+		}
+		libf.Close()
+
+		if len(sonames) == 0 && strings.HasSuffix(realname, ".so") {
+			sonames = append(sonames, realname)
+			fmt.Printf("DEBUG: %s has no DT_SONAME, using %s as an SONAME\n", realname, realname)
+		}
+
+		for _, soname := range(sonames) {
+			fname, _, err := parse_lib_filename(soname)
+			if err != nil {
+				continue
+			}
+			linkname := fname + ".so"
+			if realname != soname && realname != linkname {
+				fmt.Printf("DEBUG: Skipping %s because it doesn't match soname %s or linkname %s\n", realname, soname, linkname)
+				continue
+			}
+			dupe_found := false
+			for _, existing := range *entries {
+				if filepath.Base(existing.Name) == realname {
+					dupe_found = true
+					break
+				}
+			}
+			if dupe_found {
+				continue
+			}
+			entry := LDSOCacheEntry{
+				// fullpath is relative to "/"
+				Name: filepath.Join("/", fullpath),
+				Flags: flags,
+				OSVersion_Needed: 0,
+				HWCap_Needed: 0,
+			}
+			*entries = append(*entries, entry)
+		}
+	}
+	return nil
+}
+
+func AddLDSOCacheEntriesForDirs(fsys fs.FS, libdirs []string, entries *[]LDSOCacheEntry) (error) {
+	for _, libdir := range libdirs {
+		err := AddLDSOCacheEntriesForDir(fsys, libdir, entries)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func BuildCacheFileForDirs(fsys fs.FS, libdirs []string) (*LDSOCacheFile, error) {
+	entries := []LDSOCacheEntry{}
+	err := AddLDSOCacheEntriesForDirs(fsys, libdirs, &entries)
+	if err != nil {
+		return nil, err
+	}
+	var magic [17]byte
+	var version [3]byte
+	copy(magic[:], ldsoMagic)
+	copy(version[:], ldsoVersion)
+
+	header := LDSORawCacheHeader{
+		Magic: magic,
+		Version: version,
+		NumLibs: (uint32)(len(entries)),
+	}
+
+	cf := LDSOCacheFile{
+		Header:  header,
+		Entries: entries,
+	}
+
+	return &cf, nil
 }
 
 // LoadCacheFile attempts to load a cache file from disk.  When
