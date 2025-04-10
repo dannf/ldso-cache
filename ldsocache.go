@@ -203,22 +203,22 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 			continue
 		}
 		defer libf.Close()
-		// Ugly hack.
-		// We could call elf.NewFile(libf) here, but that only works
-		// if libf implements ReadAt. apko's tarfs does not. Work
-		// around that by reading the file into memory first.
-		var buf []byte
-		buf, err = fs.ReadFile(fsys, fullpath)
-		if err != nil {
-			fmt.Printf("DEBUG: Unable to open %s\n", fullpath)
-			continue
+		var libfReaderAt io.ReaderAt
+		libfReaderAt, ok := libf.(io.ReaderAt)
+		if !ok {
+			// Ugly: Work around lack of ReaderAt support by
+			// reading the entire file into memory
+			var buf []byte
+			buf, err = fs.ReadFile(fsys, fullpath)
+			if err != nil {
+				fmt.Printf("DEBUG: Unable to open %s\n", fullpath)
+				continue
+			}
+			libf.Close()
+			libfReaderAt = bytes.NewReader(buf)
 		}
-		libf.Close()
-		r := bytes.NewReader(buf)
-		if err != nil {
-			return err
-		}
-		elflibf, err := elf.NewFile(r)
+		elflibf, err := elf.NewFile(libfReaderAt)
+
 		if err != nil {
 			fmt.Printf("DEBUG: Unable to open %s as ELF\n", fullpath)
 			continue
