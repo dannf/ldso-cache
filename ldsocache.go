@@ -239,8 +239,7 @@ func extractShlibName(strtable []byte, startIdx uint32) (string, error) {
 	return string(subset[:terminatorPos]), nil
 }
 
-// Write writes a cache file to disk.
-func (cf *LDSOCacheFile) Write(path string) error {
+func (cf *LDSOCacheFile) Write(w io.Writer) error {
 	buf := &bytes.Buffer{}
 
 	// Calculate the size of the file entry table for use
@@ -316,17 +315,8 @@ func (cf *LDSOCacheFile) Write(path string) error {
 		}
 	}
 
-	w, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer w.Close()
-
-	if _, err := io.Copy(w, buf); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := io.Copy(w, buf)
+	return err
 }
 
 // Write writes a header for a cache file to disk.
