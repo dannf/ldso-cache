@@ -43,3 +43,19 @@ func Test_ParseLDSOConf_Glob(t *testing.T) {
 	require.Contains(t, dirs, "/a/libs")
 	require.Contains(t, dirs, "/b/libs")
 }
+
+// Commented-out because it is uses the host system.
+//
+// func Test_GenerateCacheFile(t *testing.T) {
+// 	libdirs := []string{"/lib"}
+// 	root := os.DirFS("/")
+// 	dirs, err := ParseLDSOConf(root, "etc/ld.so.conf")
+// 	require.NoError(t, err)
+// 	libdirs = append(libdirs, dirs...)
+// 	cacheFile, err := BuildCacheFileForDirs(root, libdirs)
+// 	require.NoError(t, err)
+// 	lsc, err := os.Create("testdata/ld.so.cache-generated")
+// 	require.NoError(t, err)
+// 	err = cacheFile.Write(lsc)
+// 	require.NoError(t, err)
+// }
