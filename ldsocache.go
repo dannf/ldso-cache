@@ -391,7 +391,7 @@ func LoadCacheFile(path string) (*LDSOCacheFile, error) {
 
 	// Align to nearest 4 byte boundary.
 	alignedPos := (pos & -16) + 8
-	pos, err = r.Seek(alignedPos, io.SeekStart)
+	_, err = r.Seek(alignedPos, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
