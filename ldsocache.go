@@ -168,8 +168,14 @@ func ParseLibFilename(realname string) (string, string, error) {
 }
 
 func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEntry) (error) {
+	var err error
 	// fs.FS wants all file paths to be relative
-	libdir = strings.TrimLeft(libdir, "/")
+	if filepath.IsAbs(libdir) {
+		libdir, err = filepath.Rel("/", libdir)
+		if err != nil {
+			return err
+		}
+	}
 	dirents, err := fs.ReadDir(fsys, libdir)
 	if err != nil {
 		// It is OK for a directory to not exist
