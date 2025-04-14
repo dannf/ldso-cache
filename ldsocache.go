@@ -267,7 +267,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 			fmt.Printf("DEBUG: %s has no DT_SONAME, using %s as an SONAME\n", realname, realname)
 		}
 
-		for _, soname := range(sonames) {
+		for _, soname := range sonames {
 			fname, _, err := ParseLibFilename(soname)
 			if err != nil {
 				continue
