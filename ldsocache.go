@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -178,8 +179,10 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 	}
 	dirents, err := fs.ReadDir(fsys, libdir)
 	if err != nil {
-		// It is OK for a directory to not exist
-		return nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
 
 	for _, dirent := range dirents {
