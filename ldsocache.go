@@ -157,7 +157,7 @@ func parse_lib_filename(realname string) (string, string, error) {
 	} else {
 		pieces := strings.Split(realname, ".so.")
 		if len(pieces) < 2 {
-			return "", "", fmt.Errorf("Invalid library name: %s", realname)
+			return "", "", fmt.Errorf("invalid library name: %s", realname)
 		}
 		name = strings.Join(pieces[:len(pieces)-1], ".so.")
 		ver = pieces[len(pieces)-1]
@@ -242,7 +242,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 			flags |= FLAG_AARCH64_LIB64
 		// FIXME: Add other architectures
 		default:
-			return fmt.Errorf("Unknown Machine Type")
+			return fmt.Errorf("unknown machine type")
 		}
 		libf.Close()
 
