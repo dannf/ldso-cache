@@ -139,7 +139,7 @@ func (shdr *LDSOCacheExtensionSectionHeader) describe() {
 	fmt.Printf("  Size [%d]\n", shdr.Size)
 }
 
-func parse_lib_filename(realname string) (string, string, error) {
+func ParseLibFilename(realname string) (string, string, error) {
 	var name string
 	var ver string
 	// ldconfig(8) says it "will look only at files that are named lib*.so*
@@ -259,7 +259,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 		}
 
 		for _, soname := range(sonames) {
-			fname, _, err := parse_lib_filename(soname)
+			fname, _, err := ParseLibFilename(soname)
 			if err != nil {
 				continue
 			}
