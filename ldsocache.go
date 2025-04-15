@@ -315,14 +315,10 @@ func BuildCacheFileForDirs(fsys fs.FS, libdirs []string) (*LDSOCacheFile, error)
 	if err != nil {
 		return nil, err
 	}
-	var magic [17]byte
-	var version [3]byte
-	copy(magic[:], ldsoMagic)
-	copy(version[:], ldsoVersion)
 
 	header := LDSORawCacheHeader{
-		Magic: magic,
-		Version: version,
+		Magic: [17]byte([]byte(ldsoMagic)),
+		Version: [3]byte([]byte(ldsoVersion)),
 		NumLibs: (uint32)(len(entries)),
 	}
 
