@@ -173,9 +173,9 @@ func ParseLibFilename(realname string) (string, string, error) {
 	return name, ver, nil
 }
 
-// Scan `libdir` for shared libraries. Adds a new entry in `entries` for
+// Scan `libdir` for shared libraries. Adds a new entry into `entryMap` for
 // any that don't already have an entry there.
-func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEntry) error {
+func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LDSOCacheEntry) error {
 	var err error
 	// fs.FS wants all file paths to be relative
 	if filepath.IsAbs(libdir) {
@@ -283,37 +283,37 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 				fmt.Printf("DEBUG: Skipping %s because it doesn't match soname %s or linkname %s\n", realname, soname, linkname)
 				continue
 			}
-			dupe_found := false
-			for _, existing := range *entries {
-				if filepath.Base(existing.Name) == realname {
-					dupe_found = true
-					break
-				}
-			}
-			if dupe_found {
+			_, ok := entryMap[realname]
+			if ok {
 				continue
 			}
-			entry := LDSOCacheEntry{
+			entryMap[realname] = LDSOCacheEntry{
 				// fullpath is relative to "/"
 				Name: filepath.Join("/", fullpath),
 				Flags: flags,
 				OSVersion_Needed: 0,
 				HWCap_Needed: 0,
 			}
-			*entries = append(*entries, entry)
 		}
 	}
 	return nil
 }
 
 func AddLDSOCacheEntriesForDirs(fsys fs.FS, libdirs []string) ([]LDSOCacheEntry, error) {
-	entries := []LDSOCacheEntry{}
+	entryMap := map[string]LDSOCacheEntry{}
+
 	for _, libdir := range libdirs {
-		err := AddLDSOCacheEntriesForDir(fsys, libdir, &entries)
+		err := AddLDSOCacheEntriesForDir(fsys, libdir, entryMap)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	entries := make([]LDSOCacheEntry, 0, len(entryMap))
+	for _, entry := range entryMap {
+		entries = append(entries, entry)
+	}
+
 	return entries, nil
 }
 
