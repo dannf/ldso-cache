@@ -196,9 +196,9 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 		realname := dirent.Name()
 		fullpath := filepath.Join(libdir, realname)
 		mode := dirent.Type()
-		is_link := (mode & fs.ModeSymlink != 0)
+		isLink := (mode & fs.ModeSymlink != 0)
 
-		if is_link {
+		if isLink {
 			// Stat follows symlinks
 			info, err := fs.Stat(fsys, fullpath)
 			if err != nil {
@@ -211,7 +211,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 			}
 		}
 
-		if !(mode.IsRegular() || is_link) {
+		if !(mode.IsRegular() || isLink) {
 			continue
 		}
 		libf, err := fsys.Open(fullpath)
@@ -583,8 +583,8 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 		if len(line) == 0 {
 			continue
 		}
-		glob, is_include := strings.CutPrefix(line, "include ")
-		if is_include {
+		glob, isInclude := strings.CutPrefix(line, "include ")
+		if isInclude {
 			glob = strings.TrimSpace(glob)
 			glob = strings.TrimLeft(glob, "/")
 			matches, err := fs.Glob(fsys, glob)
