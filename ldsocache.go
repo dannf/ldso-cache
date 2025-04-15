@@ -234,7 +234,6 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 			libfReaderAt = bytes.NewReader(buf)
 		}
 		elflibf, err := elf.NewFile(libfReaderAt)
-
 		if err != nil {
 			fmt.Printf("DEBUG: Unable to open %s as ELF\n", fullpath)
 			continue
