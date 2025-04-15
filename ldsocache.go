@@ -306,19 +306,19 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 	return nil
 }
 
-func AddLDSOCacheEntriesForDirs(fsys fs.FS, libdirs []string, entries *[]LDSOCacheEntry) error {
+func AddLDSOCacheEntriesForDirs(fsys fs.FS, libdirs []string) ([]LDSOCacheEntry, error) {
+	entries := []LDSOCacheEntry{}
 	for _, libdir := range libdirs {
-		err := AddLDSOCacheEntriesForDir(fsys, libdir, entries)
+		err := AddLDSOCacheEntriesForDir(fsys, libdir, &entries)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return entries, nil
 }
 
 func BuildCacheFileForDirs(fsys fs.FS, libdirs []string) (*LDSOCacheFile, error) {
-	entries := []LDSOCacheEntry{}
-	err := AddLDSOCacheEntriesForDirs(fsys, libdirs, &entries)
+	entries, err := AddLDSOCacheEntriesForDirs(fsys, libdirs)
 	if err != nil {
 		return nil, err
 	}
