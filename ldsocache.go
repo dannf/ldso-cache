@@ -216,6 +216,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 		}
 		libf, err := fsys.Open(fullpath)
 		if err != nil {
+			fmt.Printf("Warning: could not open %s\n", fullpath)
 			continue
 		}
 		defer libf.Close()
