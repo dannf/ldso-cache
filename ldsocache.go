@@ -568,7 +568,6 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 		return nil, err
 	}
 	var libpaths []string
-	var seenpaths []string
 
 	lines := strings.Split(string(contents), "\n")
 	for _, line := range lines {
@@ -603,20 +602,13 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 			}
 			return libpaths, nil
 		}
-		if _, err := fs.Stat(fsys, line); os.IsNotExist(err) {
-			continue
-		}
-		realpath := line
 
-		if err != nil {
-			return nil, err
-		}
-		if slices.Contains(seenpaths, realpath) {
-			fmt.Printf("Warning: Skipping %s because we've already seen it\n", realpath)
+		libpath := line
+		if slices.Contains(libpaths, libpath) {
+			fmt.Printf("Warning: Skipping %s because we've already seen it\n", libpath)
 			continue
 		}
-		libpaths = append(libpaths, line)
-		seenpaths = append(seenpaths, realpath)
+		libpaths = append(libpaths, libpath)
 	}
 	return libpaths, nil
 }
