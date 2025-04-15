@@ -140,6 +140,11 @@ func (shdr *LDSOCacheExtensionSectionHeader) describe() {
 	fmt.Printf("  Size [%d]\n", shdr.Size)
 }
 
+// accepts a library name and returns its name and a version
+// ex: "libfoo.so.1" -> "libfoo", "1"
+// ex: "libbar.so" -> "libbar", ""
+//
+// returns an error if realname doesn't comply w/ the name scheme
 func ParseLibFilename(realname string) (string, string, error) {
 	var name string
 	var ver string
@@ -168,6 +173,8 @@ func ParseLibFilename(realname string) (string, string, error) {
 	return name, ver, nil
 }
 
+// Scan `libdir` for shared libraries. Adds a new entry in `entries` for
+// any that don't already have an entry there.
 func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEntry) error {
 	var err error
 	// fs.FS wants all file paths to be relative
@@ -550,6 +557,8 @@ func (hdr *LDSORawCacheHeader) Write(w io.Writer) error {
 	return nil
 }
 
+// Parse an ld.so.conf file, following include directives and globs
+// Return a slice of directory paths
 func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 	conf, err := fsys.Open(ldsoconf)
 	if err != nil {
