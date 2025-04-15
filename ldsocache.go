@@ -217,8 +217,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEn
 		if !ok {
 			// Ugly: Work around lack of ReaderAt support by
 			// reading the entire file into memory
-			var buf []byte
-			buf, err = fs.ReadFile(fsys, fullpath)
+			buf, err := fs.ReadFile(fsys, fullpath)
 			if err != nil {
 				fmt.Printf("DEBUG: Unable to open %s\n", fullpath)
 				continue
