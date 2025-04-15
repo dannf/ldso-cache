@@ -24,7 +24,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"unsafe"
 )
@@ -557,9 +556,9 @@ func (hdr *LDSORawCacheHeader) Write(w io.Writer) error {
 	return nil
 }
 
-// Parse an ld.so.conf file, following include directives and globs
-// Return a slice of directory paths
-func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
+// This is the worker function behind ParseLDSOConf(). It is a recursive
+// function that uses a key-only map for efficiency.
+func parseLDSOConf(fsys fs.FS, ldsoconf string) (map[string]bool, error) {
 	conf, err := fsys.Open(ldsoconf)
 	if err != nil {
 		fmt.Printf("Warning: Could not open config file %s\n", ldsoconf)
@@ -571,7 +570,8 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 		fmt.Printf("Warning: Could not read config file %s\n", ldsoconf)
 		return nil, err
 	}
-	var libpaths []string
+
+	seenPaths := map[string]bool{}
 
 	lines := strings.Split(string(contents), "\n")
 	for _, line := range lines {
@@ -602,16 +602,33 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 					fmt.Printf("Warning: Could not parse config file %s\n", match)
 					continue
 				}
-				libpaths = append(libpaths, incpaths...)
+				for _, path := range incpaths {
+					seenPaths[path] = true
+				}
 			}
-			return libpaths, nil
+			return seenPaths, nil
 		}
 
 		libpath := line
-		if slices.Contains(libpaths, libpath) {
+		if _, ok := seenPaths[libpath]; ok {
 			fmt.Printf("Warning: Skipping %s because we've already seen it\n", libpath)
 			continue
 		}
+		seenPaths[libpath] = true
+	}
+	return seenPaths, nil
+}
+
+// Parse an ld.so.conf file, following include directives and globs
+// Returns a slice of library directories. The real work is done
+// in parseLDSOConf(), this just converts its return value into a slice.
+func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
+	pathMap, err := parseLDSOConf(fsys, ldsoconf)
+	if err != nil {
+		return nil, err
+	}
+	libpaths := make([]string, 0, len(pathMap))
+	for libpath, _ := range pathMap {
 		libpaths = append(libpaths, libpath)
 	}
 	return libpaths, nil
