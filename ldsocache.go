@@ -168,7 +168,7 @@ func ParseLibFilename(realname string) (string, string, error) {
 	return name, ver, nil
 }
 
-func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEntry) (error) {
+func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entries *[]LDSOCacheEntry) error {
 	var err error
 	// fs.FS wants all file paths to be relative
 	if filepath.IsAbs(libdir) {
