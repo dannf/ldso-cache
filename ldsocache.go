@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -198,11 +199,11 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 			// Stat follows symlinks
 			info, err := fs.Stat(fsys, fullpath)
 			if err != nil {
-				fmt.Printf("Warning: Could not stat %s\n", fullpath)
+				log.Printf("Warning: Could not stat %s\n", fullpath)
 				continue
 			}
 			if !info.Mode().IsRegular() {
-				fmt.Printf("DEBUG: Skipping %s, not a link to a regular file\n", fullpath)
+				log.Printf("DEBUG: Skipping %s, not a link to a regular file\n", fullpath)
 				continue
 			}
 		}
@@ -212,7 +213,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 		}
 		libf, err := fsys.Open(fullpath)
 		if err != nil {
-			fmt.Printf("Warning: could not open %s\n", fullpath)
+			log.Printf("Warning: could not open %s\n", fullpath)
 			continue
 		}
 		defer libf.Close()
@@ -223,7 +224,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 			// reading the entire file into memory
 			buf, err := fs.ReadFile(fsys, fullpath)
 			if err != nil {
-				fmt.Printf("DEBUG: Unable to open %s\n", fullpath)
+				log.Printf("DEBUG: Unable to open %s\n", fullpath)
 				continue
 			}
 			libf.Close()
@@ -231,7 +232,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 		}
 		elflibf, err := elf.NewFile(libfReaderAt)
 		if err != nil {
-			fmt.Printf("DEBUG: Unable to open %s as ELF\n", fullpath)
+			log.Printf("DEBUG: Unable to open %s as ELF\n", fullpath)
 			continue
 		}
 		// FIXME: do we need to check for the ELF magic bytes?
@@ -261,12 +262,12 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 		// no SONAME. Observed with libR.so on Ubuntu.
 		if len(sonames) == 0 && strings.HasSuffix(realname, ".so") {
 			sonames = append(sonames, realname)
-			fmt.Printf("DEBUG: %s has no SONAME, using filename as an SONAME\n", realname)
+			log.Printf("DEBUG: %s has no SONAME, using filename as an SONAME\n", realname)
 		}
 
 		if len(sonames) == 0 && strings.HasSuffix(realname, ".so") {
 			sonames = append(sonames, realname)
-			fmt.Printf("DEBUG: %s has no DT_SONAME, using %s as an SONAME\n", realname, realname)
+			log.Printf("DEBUG: %s has no DT_SONAME, using %s as an SONAME\n", realname, realname)
 		}
 
 		for _, soname := range sonames {
@@ -276,7 +277,7 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 			}
 			linkname := fname + ".so"
 			if realname != soname && realname != linkname {
-				fmt.Printf("DEBUG: Skipping %s because it doesn't match soname %s or linkname %s\n", realname, soname, linkname)
+				log.Printf("DEBUG: Skipping %s because it doesn't match soname %s or linkname %s\n", realname, soname, linkname)
 				continue
 			}
 			_, ok := entryMap[realname]
@@ -558,13 +559,13 @@ func (hdr *LDSORawCacheHeader) Write(w io.Writer) error {
 func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 	conf, err := fsys.Open(ldsoconf)
 	if err != nil {
-		fmt.Printf("Warning: Could not open config file %s\n", ldsoconf)
+		log.Printf("Warning: Could not open config file %s\n", ldsoconf)
 		return nil, err
 	}
 	defer conf.Close()
 	contents, err := io.ReadAll(conf)
 	if err != nil {
-		fmt.Printf("Warning: Could not read config file %s\n", ldsoconf)
+		log.Printf("Warning: Could not read config file %s\n", ldsoconf)
 		return nil, err
 	}
 	var libpaths []string
@@ -585,17 +586,17 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 			glob = strings.TrimLeft(glob, "/")
 			matches, err := fs.Glob(fsys, glob)
 			if err != nil {
-				fmt.Printf("Warning: glob error in %s: %s", ldsoconf, glob)
+				log.Printf("Warning: glob error in %s: %s", ldsoconf, glob)
 				continue
 			}
 			if len(matches) == 0 {
-				fmt.Printf("Warning: No matches for glob %s in %s\n", glob, ldsoconf)
+				log.Printf("Warning: No matches for glob %s in %s\n", glob, ldsoconf)
 			}
 
 			for _, match := range matches {
 				incpaths, err := ParseLDSOConf(fsys, match)
 				if err != nil {
-					fmt.Printf("Warning: Could not parse config file %s\n", match)
+					log.Printf("Warning: Could not parse config file %s\n", match)
 					continue
 				}
 				libpaths = append(libpaths, incpaths...)
@@ -605,7 +606,7 @@ func ParseLDSOConf(fsys fs.FS, ldsoconf string) ([]string, error) {
 
 		libpath := line
 		if slices.Contains(libpaths, libpath) {
-			fmt.Printf("Warning: Skipping %s because we've already seen it\n", libpath)
+			log.Printf("Warning: Skipping %s because we've already seen it\n", libpath)
 			continue
 		}
 		libpaths = append(libpaths, libpath)
