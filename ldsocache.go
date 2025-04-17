@@ -38,30 +38,30 @@ const ldsoExtensionMagic = 0xEAA42174
 const cacheExtensionTagGenerator = uint32(1)
 
 const (
-	FLAG_ANY                    uint32 = 0xffff
-	FLAG_TYPE_MASK              uint32 = 0x00ff
-	FLAG_LIBC4                  uint32 = 0x0000
-	FLAG_ELF                    uint32 = 0x0001
-	FLAG_ELF_LIBC5              uint32 = 0x0002
-	FLAG_ELF_LIBC6              uint32 = 0x0003
-	FLAG_REQUIRED_MASK          uint32 = 0xff00
-	FLAG_SPARC_LIB64            uint32 = 0x0100
-	FLAG_X8664_LIB64            uint32 = 0x0300
-	FLAG_S390_LIB64             uint32 = 0x0400
-	FLAG_POWERPC_LIB64          uint32 = 0x0500
-	FLAG_MIPS64_LIBN32          uint32 = 0x0600
-	FLAG_MIPS64_LIBN64          uint32 = 0x0700
-	FLAG_X8664_LIBX32           uint32 = 0x0800
-	FLAG_ARM_LIBHF              uint32 = 0x0900
-	FLAG_AARCH64_LIB64          uint32 = 0x0a00
-	FLAG_ARM_LIBSF              uint32 = 0x0b00
-	FLAG_MIPS_LIB32_NAN2008     uint32 = 0x0c00
-	FLAG_MIPS64_LIBN32_NAN2008  uint32 = 0x0d00
-	FLAG_MIPS64_LIBN64_NAN2008  uint32 = 0x0e00
-	FLAG_RISCV_FLOAT_ABI_SOFT   uint32 = 0x0f00
-	FLAG_RISCV_FLOAT_ABI_DOUBLE uint32 = 0x1000
-	FLAG_LARCH_FLOAT_ABI_SOFT   uint32 = 0x1100
-	FLAG_LARCH_FLOAT_ABI_DOUBLE uint32 = 0x1200
+	FlagAny                 uint32 = 0xffff
+	FlagTypemask            uint32 = 0x00ff
+	FlagLibc4               uint32 = 0x0000
+	FlagElf                 uint32 = 0x0001
+	FlagElfLibc5            uint32 = 0x0002
+	FlagElfLibc6            uint32 = 0x0003
+	FlagRequiredMask        uint32 = 0xff00
+	FlagSparcLib64          uint32 = 0x0100
+	FlagX86_64Lib64         uint32 = 0x0300
+	FlagS390Lib64           uint32 = 0x0400
+	FlagPowerpcLib64        uint32 = 0x0500
+	FlagMips64LibN32        uint32 = 0x0600
+	FlagMips64LibN64        uint32 = 0x0700
+	FlagX86_64LibX32        uint32 = 0x0800
+	FlagArmLibHf            uint32 = 0x0900
+	FlagAarch64Lib64        uint32 = 0x0a00
+	FlagArmLibSf            uint32 = 0x0b00
+	FlagMipsLib32Nan2008    uint32 = 0x0c00
+	FlagMips64LibN32Nan2008 uint32 = 0x0d00
+	FlagMips64LibN64Nan2008 uint32 = 0x0e00
+	FlagRiscVFloatAbiSoft   uint32 = 0x0f00
+	FlagRiscVFloatAbiDouble uint32 = 0x1000
+	FlagLarchFloatAbiSoft   uint32 = 0x1100
+	FlagLarchFloatAbiDouble uint32 = 0x1200
 )
 
 type LDSORawCacheHeader struct {
@@ -86,8 +86,8 @@ type LDSORawCacheEntry struct {
 	Key   uint32
 	Value uint32
 
-	OSVersion_Needed uint32
-	HWCap_Needed     uint64
+	OSVersionNeeded uint32
+	HWCapNeeded     uint64
 }
 
 type LDSOCacheEntry struct {
@@ -95,8 +95,8 @@ type LDSOCacheEntry struct {
 
 	Name string
 
-	OSVersion_Needed uint32
-	HWCap_Needed     uint64
+	OSVersionNeeded uint32
+	HWCapNeeded     uint64
 }
 
 type LDSOCacheExtensionHeader struct {
@@ -249,18 +249,18 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 			continue
 		}
 		flags := uint32(0)
-		flags |= FLAG_ELF
+		flags |= FlagElf
 		// FIXME: Shouldn't just assert this
-		flags |= FLAG_ELF_LIBC6
+		flags |= FlagElfLibc6
 		sonames, err := elflibf.DynString(elf.DT_SONAME)
 		if err != nil {
 			continue
 		}
 		switch elflibf.FileHeader.Machine {
 		case elf.EM_X86_64:
-			flags |= FLAG_X8664_LIB64
+			flags |= FlagX86_64Lib64
 		case elf.EM_AARCH64:
-			flags |= FLAG_AARCH64_LIB64
+			flags |= FlagAarch64Lib64
 		// FIXME: Add other architectures
 		default:
 			return fmt.Errorf("unknown machine type")
@@ -295,10 +295,10 @@ func AddLDSOCacheEntriesForDir(fsys fs.FS, libdir string, entryMap map[string]LD
 			}
 			entryMap[realname] = LDSOCacheEntry{
 				// fullpath is relative to "/"
-				Name:             filepath.Join("/", fullpath),
-				Flags:            flags,
-				OSVersion_Needed: 0,
-				HWCap_Needed:     0,
+				Name:            filepath.Join("/", fullpath),
+				Flags:           flags,
+				OSVersionNeeded: 0,
+				HWCapNeeded:     0,
 			}
 		}
 	}
@@ -390,9 +390,9 @@ func LoadCacheFile(path string) (*LDSOCacheFile, error) {
 	entries := []LDSOCacheEntry{}
 	for _, rawlib := range rawlibs {
 		entry := LDSOCacheEntry{
-			Flags:            rawlib.Flags,
-			OSVersion_Needed: rawlib.OSVersion_Needed,
-			HWCap_Needed:     rawlib.HWCap_Needed,
+			Flags:           rawlib.Flags,
+			OSVersionNeeded: rawlib.OSVersionNeeded,
+			HWCapNeeded:     rawlib.HWCapNeeded,
 		}
 
 		name, err := extractShlibName(strtable, rawlib.Value-uint32(pos))
@@ -496,11 +496,11 @@ func (cf *LDSOCacheFile) Write(w io.Writer) error {
 		stringTable = append(stringTable, entry...)
 
 		lrcEntry := LDSORawCacheEntry{
-			Flags:            lib.Flags,
-			Key:              cursor + uint32(len(filepath.Dir(lib.Name))+1),
-			Value:            cursor,
-			OSVersion_Needed: lib.OSVersion_Needed,
-			HWCap_Needed:     lib.HWCap_Needed,
+			Flags:           lib.Flags,
+			Key:             cursor + uint32(len(filepath.Dir(lib.Name))+1),
+			Value:           cursor,
+			OSVersionNeeded: lib.OSVersionNeeded,
+			HWCapNeeded:     lib.HWCapNeeded,
 		}
 
 		lrcEntries = append(lrcEntries, lrcEntry)
