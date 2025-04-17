@@ -154,22 +154,18 @@ func ParseLibFilename(realname string) (string, string, error) {
 	if !strings.HasPrefix(realname, "lib") && !strings.HasPrefix(realname, "ld-") {
 		return "", "", fmt.Errorf("filename does not start with 'lib' or 'ld-': %s", realname)
 	}
-	if !strings.Contains(realname, ".so") {
-		return "", "", fmt.Errorf("filename does not contain '.so': %s", realname)
-	}
 	if strings.HasSuffix(realname, ".so") {
 		name = strings.TrimSuffix(realname, ".so")
 		ver = ""
-	} else {
-		pieces := strings.Split(realname, ".so.")
-		if len(pieces) < 2 {
-			return "", "", fmt.Errorf("invalid library name: %s", realname)
-		}
-		name = strings.Join(pieces[:len(pieces)-1], ".so.")
-		ver = pieces[len(pieces)-1]
+		return name, ver, nil
 	}
+	idx := strings.LastIndex(realname, ".so.")
+	if idx < 1 {
+		return "", "", fmt.Errorf("invalid library name: %s", realname)
+	}
+	name = realname[:idx]
+	ver = realname[idx + len(".so."):]
 
-	fmt.Printf("RETURNING %s for %s\n", name, realname)
 	return name, ver, nil
 }
 

@@ -28,6 +28,81 @@ func Test_WriteCacheFile(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func Test_ParseLibFilename(t *testing.T) {
+	name, ver, err := ParseLibFilename("libfoo.so.1")
+	require.NoError(t, err)
+	require.Equal(t, name, "libfoo")
+	require.Equal(t, ver, "1")
+}
+
+func Test_ParseLibFilename_Versioned_DotOne(t *testing.T) {
+	name, ver, err := ParseLibFilename("libfoo.so.1")
+	require.NoError(t, err)
+	require.Equal(t, name, "libfoo")
+	require.Equal(t, ver, "1")
+}
+
+func Test_ParseLibFilename_Versioned_DotOneDotTwo(t *testing.T) {
+	name, ver, err := ParseLibFilename("libfoo.so.1.2")
+	require.NoError(t, err)
+	require.Equal(t, name, "libfoo")
+	require.Equal(t, ver, "1.2")
+}
+
+func Test_ParseLibFilename_Versioned_SoSo_DotOne(t *testing.T) {
+	name, ver, err := ParseLibFilename("libso.so.1")
+	require.NoError(t, err)
+	require.Equal(t, name, "libso")
+	require.Equal(t, ver, "1")
+}
+
+func Test_ParseLibFilename_Unversioned_SoSo(t *testing.T) {
+	name, ver, err := ParseLibFilename("libso.so")
+	require.NoError(t, err)
+	require.Equal(t, name, "libso")
+	require.Equal(t, ver, "")
+}
+
+func Test_ParseLibFilename_Unversioned_SoDotSoDotSo(t *testing.T) {
+	name, ver, err := ParseLibFilename("libso.so.so")
+	require.NoError(t, err)
+	require.Equal(t, name, "libso.so")
+	require.Equal(t, ver, "")
+}
+
+func Test_ParseLibFilename_Versioned_SoDotSoDotSoVer(t *testing.T) {
+	name, ver, err := ParseLibFilename("libso.so.so.7")
+	require.NoError(t, err)
+	require.Equal(t, name, "libso.so")
+	require.Equal(t, ver, "7")
+}
+
+func Test_ParseLibFilename_HangingSo(t *testing.T) {
+	// Unclear if this should be an error
+	name, ver, err := ParseLibFilename("libfoo.so.")
+	require.NoError(t, err)
+	require.Equal(t, name, "libfoo")
+	require.Equal(t, ver, "")
+}
+
+func Test_ParseLibFilename_Versioned_NoName(t *testing.T) {
+	// Unclear if this should be an error
+	name, ver, err := ParseLibFilename("lib.so")
+	require.NoError(t, err)
+	require.Equal(t, name, "lib")
+	require.Equal(t, ver, "")
+}
+
+func Test_ParseLibFilename_NoLibPrefix(t *testing.T) {
+	_, _, err := ParseLibFilename("foo.so.1")
+	require.Error(t, err)
+}
+
+func Test_ParseLibFilename_NoSo(t *testing.T) {
+	_, _, err := ParseLibFilename("libfoo.no.1")
+	require.Error(t, err)
+}
+
 func Test_ParseLDSOConf_Simple(t *testing.T) {
 	fsys := os.DirFS("testdata")
 	dirs, err := ParseLDSOConf(fsys, "ld.so.conf.simple")
