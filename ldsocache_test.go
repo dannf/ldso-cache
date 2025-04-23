@@ -28,7 +28,7 @@ func Test_WriteCacheFile(t *testing.T) {
 	cacheFile, err := LoadCacheFile(f)
 	require.NoError(t, err)
 	f.Close()
-	out, err := os.Create("testdata/ld.so.cache-new")
+	out, err := os.CreateTemp(t.TempDir(), "ld.so.cache-new")
 	require.NoError(t, err)
 	err = cacheFile.Write(out)
 	require.NoError(t, err)
@@ -125,18 +125,19 @@ func Test_ParseLDSOConf_Glob(t *testing.T) {
 	require.Contains(t, dirs, "/b/libs")
 }
 
-// Commented-out because it is uses the host system.
-//
-// func Test_GenerateCacheFile(t *testing.T) {
-// 	libdirs := []string{"/lib"}
-// 	root := os.DirFS("/")
-// 	dirs, err := ParseLDSOConf(root, "etc/ld.so.conf")
-// 	require.NoError(t, err)
-// 	libdirs = append(libdirs, dirs...)
-// 	cacheFile, err := BuildCacheFileForDirs(root, libdirs)
-// 	require.NoError(t, err)
-// 	lsc, err := os.Create("testdata/ld.so.cache-generated")
-// 	require.NoError(t, err)
-// 	err = cacheFile.Write(lsc)
-// 	require.NoError(t, err)
-// }
+func Test_GenerateCacheFile(t *testing.T) {
+	// This uses the host system, uncomment to run tests on your machine.
+	t.Skip()
+
+	libdirs := []string{"/lib"}
+	root := os.DirFS("/")
+	dirs, err := ParseLDSOConf(root, "etc/ld.so.conf")
+	require.NoError(t, err)
+	libdirs = append(libdirs, dirs...)
+	cacheFile, err := BuildCacheFileForDirs(root, libdirs)
+	require.NoError(t, err)
+	lsc, err := os.Create("testdata/ld.so.cache-generated")
+	require.NoError(t, err)
+	err = cacheFile.Write(lsc)
+	require.NoError(t, err)
+}
