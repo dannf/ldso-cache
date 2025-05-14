@@ -163,7 +163,7 @@ func doGetElfInfo(libfReaderAt io.ReaderAt) (elfInfo, error) {
 	if err != nil {
 		return info, err
 	}
-	// FIXME: do we need to check for the ELF magic bytes?
+	// elf.NewFile() validates ELF magic
 	if elflibf.FileHeader.Type != elf.ET_DYN {
 		return info, fmt.Errorf("not a dynamic object")
 	}
